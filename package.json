@@ -2,17 +2,13 @@
   "name": "nextjs",
   "version": "0.1.0",
   "private": true,
-  "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "build:render": "node ./scripts/render-build.js",
-    "start": "next start -H 0.0.0.0",
-    "start:prod": "next start",
-    "lint": "next lint",
-    "test:build": "node ./scripts/test-build.js",
-    "test:middleware": "node ./scripts/test-middleware.js",
-    "type-check": "tsc --noEmit"
-  },
+ "scripts": {
+  "dev": "next dev",
+  "build": "prisma generate && next build",
+  "start": "next start -H 0.0.0.0",
+  "lint": "next lint",
+  "type-check": "tsc --noEmit"
+},
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
     "@next/swc-wasm-nodejs": "^14.0.0",
