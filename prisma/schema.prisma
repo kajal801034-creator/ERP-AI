@@ -1,0 +1,483 @@
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+  binaryTargets = ["native", "rhel-openssl-1.0.x"]
+}
+
+model User {
+  id            String         @id @default(auto()) @map("_id") @db.ObjectId
+  email         String         @unique
+  password      String
+  firstName     String?
+  lastName      String?
+  image         String?
+  bio           String?
+  role          String?
+  location      String?
+  darkMode      Boolean        @default(false)
+  compactView   Boolean        @default(false)
+  company       Company?       @relation(fields: [companyId], references: [id])
+  companyId     String?        @db.ObjectId
+  notifications Notification[]
+  transactions  Transaction[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+model Company {
+  id                String             @id @default(auto()) @map("_id") @db.ObjectId
+  name              String
+  address           String?
+  phone             String?
+  email             String?
+  website           String?
+  logo              String?
+  defaultCurrency   String              @default("USD")
+  users             User[]
+  inventory         InventoryItem[]
+  employees         Employee[]
+  customers         Customer[]
+  sales             Sale[]
+  projects          Project[]
+  transactions      Transaction[]
+  budgetCategories  BudgetCategory[]
+  financialAccounts FinancialAccount[]
+  recurringSchedules RecurringSchedule[]
+  budgets           Budget[]
+  attendance        Attendance[]
+  approvalWorkflows ApprovalWorkflow[]
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+}
+
+model Notification {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  title       String
+  message     String
+  type        String   // budget-alert, budget-created, sale-created, transaction-created, etc.
+  read        Boolean  @default(false)
+  user        User     @relation(fields: [userId], references: [id])
+  userId      String   @db.ObjectId
+  entityId    String?  @db.ObjectId // ID of the related entity (budget, sale, etc.)
+  entityType  String?  // Type of the related entity (budget, sale, transaction, etc.)
+  actionType  String?  // created, updated, deleted, etc.
+  actorName   String?  // Name of the user who performed the action
+  metadata    String?  // Additional JSON data
+  link        String?  // Link to the related entity
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+  @@index([type])
+  @@index([read])
+  @@index([entityType, entityId])
+}
+
+model InventoryItem {
+  id           String        @id @default(auto()) @map("_id") @db.ObjectId
+  name         String
+  sku          String
+  category     String
+  quantity     Int
+  price        Float
+  status       String
+  description  String?
+  reorderPoint Int          @default(10)
+  company      Company      @relation(fields: [companyId], references: [id])
+  companyId    String       @db.ObjectId
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@index([companyId])
+}
+
+model Employee {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  firstName  String
+  lastName   String
+  email      String   @unique
+  phone      String?
+  position   String
+  department String
+  startDate  DateTime
+  salary     Float?
+  status     String   @default("active")
+  password   String?  // Added for employee login
+  role       String   @default("employee") // employee, admin, manager
+  permissions String[] // Array of permissions
+  lastLogin  DateTime?
+  company    Company  @relation(fields: [companyId], references: [id])
+  companyId  String   @db.ObjectId
+  sales      Sale[]
+  attendance Attendance[]
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([companyId])
+  @@index([role])
+}
+
+model Attendance {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  employee   Employee @relation(fields: [employeeId], references: [id])
+  employeeId String   @db.ObjectId
+  date       DateTime @default(now())
+  checkIn    DateTime @default(now())
+  checkOut   DateTime?
+  status     String   @default("present") // present, absent, late, half-day, leave
+  notes      String?
+  company    Company  @relation(fields: [companyId], references: [id])
+  companyId  String   @db.ObjectId
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([employeeId])
+  @@index([companyId])
+  @@index([date])
+}
+
+model Customer {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  name      String
+  email     String?
+  phone     String?
+  address   String?
+  company   Company  @relation(fields: [companyId], references: [id])
+  companyId String   @db.ObjectId
+  sales     Sale[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([companyId])
+}
+
+model Sale {
+  id            String     @id @default(auto()) @map("_id") @db.ObjectId
+  invoiceNumber String?
+  customer      Customer   @relation(fields: [customerId], references: [id])
+  customerId    String     @db.ObjectId
+  employee      Employee?  @relation(fields: [employeeId], references: [id])
+  employeeId    String?    @db.ObjectId
+  date          DateTime
+  status        String
+  total         Float
+  tax           Float?
+  notes         String?
+  items         SaleItem[]
+  company       Company    @relation(fields: [companyId], references: [id])
+  companyId     String     @db.ObjectId
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  @@index([customerId])
+  @@index([employeeId])
+  @@index([companyId])
+}
+
+model Project {
+  id                   String          @id @default(auto()) @map("_id") @db.ObjectId
+  name                 String
+  description          String?
+  type                 String // internal, client, research, maintenance
+  status               String // planning, in_progress, on_hold, completed, cancelled
+  startDate            DateTime
+  endDate              DateTime
+  completionPercentage Int
+  projectManager       ProjectMember
+  teamMembers          ProjectMember[]
+  client               ProjectClient?
+  budget               Float
+  expenses             Float
+  priority             String // low, medium, high
+  tags                 String[]
+  notes                String?
+  tasks                Task[]
+  milestones           Milestone[]
+  company              Company         @relation(fields: [companyId], references: [id])
+  companyId            String          @db.ObjectId
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+
+  @@index([companyId])
+}
+
+type ProjectMember {
+  employeeId String
+  name       String
+  role       String?
+  department String?
+}
+
+type ProjectClient {
+  customerId String?
+  name       String
+  company    String?
+  email      String?
+}
+
+model Task {
+  id                   String   @id @default(auto()) @map("_id") @db.ObjectId
+  project              Project  @relation(fields: [projectId], references: [id])
+  projectId            String   @db.ObjectId
+  name                 String
+  description          String?
+  status               String // not_started, in_progress, completed, blocked, awaiting_approval
+  priority             String // low, medium, high, urgent
+  assigneeId           String
+  assigneeName         String
+  startDate            DateTime
+  dueDate              DateTime
+  estimatedHours       Int
+  actualHours          Float
+  completionPercentage Int
+  dependencies         String[] @db.ObjectId
+  notes                String?
+  approvalRequired     Boolean  @default(false)
+  approvalStatus       String?  // pending, approved, rejected
+  approvedById         String?  @db.ObjectId
+  approvedByName       String?
+  approvedAt           DateTime?
+  rejectionReason      String?
+  companyId            String   @db.ObjectId
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@index([projectId])
+  @@index([companyId])
+}
+
+model Milestone {
+  id             String    @id @default(auto()) @map("_id") @db.ObjectId
+  project        Project   @relation(fields: [projectId], references: [id])
+  projectId      String    @db.ObjectId
+  name           String
+  description    String?
+  targetDate     DateTime
+  completionDate DateTime?
+  status         String // pending, completed, missed
+  deliverables   String?
+  notes          String?
+  companyId      String    @db.ObjectId
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([projectId])
+  @@index([companyId])
+}
+
+model SaleItem {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  sale        Sale     @relation(fields: [saleId], references: [id])
+  saleId      String   @db.ObjectId
+  product     String
+  description String?
+  quantity    Int
+  unitPrice   Float
+  total       Float
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([saleId])
+}
+
+model Transaction {
+  id                 String              @id @default(auto()) @map("_id") @db.ObjectId
+  date               DateTime
+  description        String
+  amount             Float
+  type               String              // income, expense
+  category           BudgetCategory?     @relation(fields: [categoryId], references: [id])
+  categoryId         String?             @db.ObjectId
+  account            FinancialAccount?   @relation(fields: [accountId], references: [id])
+  accountId          String?             @db.ObjectId
+  reference          String?             // invoice number, receipt number
+  notes              String?
+  recurring          Boolean             @default(false)
+  recurringScheduleId String?            @db.ObjectId
+  status             String              @default("completed") // pending, completed, cancelled
+  relatedTo          String?             // project id, customer id, invoice id
+  attachments        String[]
+  tags               String[]
+  company            Company             @relation(fields: [companyId], references: [id])
+  companyId          String              @db.ObjectId
+  user               User?               @relation(fields: [userId], references: [id])
+  userId             String?             @db.ObjectId
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  @@index([companyId])
+  @@index([categoryId])
+  @@index([accountId])
+  @@index([date])
+  @@index([type])
+  @@index([recurringScheduleId])
+}
+
+model RecurringSchedule {
+  id               String            @id @default(auto()) @map("_id") @db.ObjectId
+  name             String
+  description      String?
+  frequency        String            // daily, weekly, monthly, yearly
+  interval         Int               @default(1) // every X days/weeks/months/years
+  startDate        DateTime
+  endDate          DateTime?
+  nextDueDate      DateTime
+  dayOfMonth       Int?              // for monthly: which day of month
+  dayOfWeek        Int?              // for weekly: which day (0-6, 0 is Sunday)
+  monthOfYear      Int?              // for yearly: which month (1-12)
+  amount           Float
+  type             String            // income, expense
+  categoryId       String?           @db.ObjectId
+  accountId        String?           @db.ObjectId
+  lastProcessedDate DateTime?
+  status           String            @default("active") // active, paused, completed
+  company          Company           @relation(fields: [companyId], references: [id])
+  companyId        String            @db.ObjectId
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  @@index([companyId])
+  @@index([nextDueDate])
+  @@index([status])
+}
+
+model BudgetCategory {
+  id           String        @id @default(auto()) @map("_id") @db.ObjectId
+  name         String
+  type         String // income, expense
+  limit        Float?
+  color        String?
+  icon         String?
+  transactions Transaction[]
+  budgetItems  BudgetItem[]
+  company      Company       @relation(fields: [companyId], references: [id])
+  companyId    String        @db.ObjectId
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@unique([name, companyId])
+  @@index([companyId])
+}
+
+model FinancialAccount {
+  id              String           @id @default(auto()) @map("_id") @db.ObjectId
+  name            String
+  type            String // bank, cash, credit, investment, other
+  number          String?
+  balance         Float            @default(0)
+  currency        String           @default("USD")
+  institutionName String?
+  description     String?
+  transactions    Transaction[]
+  auditLogs       FinanceAuditLog[]
+  company         Company          @relation(fields: [companyId], references: [id])
+  companyId       String           @db.ObjectId
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@unique([name, companyId])
+  @@index([companyId])
+}
+
+model FinanceAuditLog {
+  id              String           @id @default(auto()) @map("_id") @db.ObjectId
+  account         FinancialAccount @relation(fields: [accountId], references: [id])
+  accountId       String           @db.ObjectId
+  previousBalance Float
+  newBalance      Float
+  changeAmount    Float
+  description     String
+  performedAt     DateTime
+  createdAt       DateTime         @default(now())
+
+  @@index([accountId])
+  @@index([performedAt])
+}
+
+model Budget {
+  id              String           @id @default(auto()) @map("_id") @db.ObjectId
+  name            String
+  description     String?
+  type            String           // annual, monthly, quarterly, project
+  startDate       DateTime
+  endDate         DateTime
+  status          String           @default("active") // active, archived, draft
+  totalBudget     Float
+  totalSpent      Float            @default(0)
+  items           BudgetItem[]
+  company         Company          @relation(fields: [companyId], references: [id])
+  companyId       String           @db.ObjectId
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@index([companyId])
+  @@index([type])
+  @@index([status])
+}
+
+model BudgetItem {
+  id              String           @id @default(auto()) @map("_id") @db.ObjectId
+  budget          Budget           @relation(fields: [budgetId], references: [id])
+  budgetId        String           @db.ObjectId
+  category        BudgetCategory?  @relation(fields: [categoryId], references: [id])
+  categoryId      String?          @db.ObjectId
+  name            String
+  amount          Float
+  spent           Float            @default(0)
+  notes           String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@index([budgetId])
+  @@index([categoryId])
+}
+
+// Enhanced notification model will be implemented in a future update
+
+model ApprovalWorkflow {
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  name            String
+  description     String?
+  itemType        String    // task, project, sale, purchase, expense, etc.
+  itemId          String    @db.ObjectId
+  status          String    @default("pending") // pending, approved, rejected, canceled
+  currentStepIndex Int       @default(0)
+  steps           WorkflowStep[]
+  initiatorId     String    @db.ObjectId // Can be either userId or employeeId
+  initiatorType   String    // user or employee
+  initiatorName   String
+  company         Company   @relation(fields: [companyId], references: [id])
+  companyId       String    @db.ObjectId
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  completedAt     DateTime?
+
+  @@index([itemId, itemType])
+  @@index([companyId])
+  @@index([status])
+}
+
+model WorkflowStep {
+  id                String          @id @default(auto()) @map("_id") @db.ObjectId
+  workflow          ApprovalWorkflow @relation(fields: [workflowId], references: [id])
+  workflowId        String          @db.ObjectId
+  stepNumber        Int
+  approverId        String          @db.ObjectId // Can be either userId or employeeId
+  approverType      String          // user or employee
+  approverName      String
+  status            String          @default("pending") // pending, approved, rejected, skipped
+  comments          String?
+  actionDate        DateTime?
+  notificationSent  Boolean         @default(false)
+  reminderSent      Boolean         @default(false)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@index([workflowId])
+  @@index([approverId])
+  @@index([status])
+}
